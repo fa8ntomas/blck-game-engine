@@ -391,7 +391,7 @@ JOYSTICK_BUTTON_NOTPRESSED=1
 	 
             ;   $0400 <-> $049B Exomizer Decrunch Table 
             ;   $049C           Start Of Crunched data   
-            org $049E
+            org $400; $049E
 
 L0418:      sei				;Program jumps here after warm boot - DOSVEC points here
             ldx #$00
