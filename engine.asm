@@ -3,22 +3,13 @@
 .def DISABLEPROTECTION
 
 ;Coverted from VAPI ATX to XEX by A.A.
- 
-;Must use MADS(2.0.4 b7)or later
-
-
-						;.echo [PM010-FrameDataLo]
-						;.echo [FramePMHeight-FrameDataHi]
-						
-						;.echo [FrameDataLo]
-						;.echo [FrameDataLoYamo-FrameDataLo]
-						;.echo (lmlm)
-						
+ 					
 VDSLST      		= $0200
 VDLSTL      		= $0200
 VDLSTH      		= $0201
 VIMIRQ      		= $0216
 VVBLKI      		= $0222
+SDMCTL              = $022F
 SDLSTL      		= $0230
 SDLSTH      		= $0231
 SSKCTL      		= $0232
@@ -35,22 +26,31 @@ CH          		= $02FC
 M0PF        		= $D000
 HPOSP0      		= $D000
 M1PF        		= $D001
+HPOSP1              = $D001
 M2PF        		= $D002
 HPOSP2      		= $D002
 M3PF        		= $D003
+HPOSP3      		= $D003
 P0PF        		= $D004
 HPOSM0      		= $D004
 P1PF        		= $D005
+HPOSM1              = $D005
 P2PF        		= $D006
+HPOSM2              = $D006
 P3PF        		= $D007
+HPOSM3              = $D007
 SIZEP0      		= $D008
+SIZEP1              = $D009
 SIZEP2      		= $D00A
 SIZEP3      		= $D00B
 P0PL        		= $D00C
+SIZEM               = $D00C
 TRIG0       		= $D010
 TRIG1       		= $D011
 COLPM0      		= $D012
+COLPM1              = $D013
 COLPM2      		= $D014
+COLPM3      		= $D015
 COLPF0      		= $D016
 COLPF1      		= $D017
 COLPF2      		= $D018
@@ -81,9 +81,23 @@ CHBASE      		= $D409
 WSYNC       		= $D40A
 VCOUNT      		= $D40B
 NMIEN       		= $D40E
+NMIST               = $D40F
+NMIRES              = $D40F
+
 SETVBV      		= $E45C
 XITVBV      		= $E462
 WARMSV      		= $E474
+
+RAMLO       equ $0004
+TRAMSZ      equ $0006
+CMCMD       equ $0007
+RTCLOK      equ $0012
+
+
+
+
+
+
 
 ;  ZP
 
@@ -167,10 +181,12 @@ SAVADR      		= $0068			;Missile to Player collision status
 RAMTOP      		= $006A
 BUFCNT      		= $006B
 BUFSTR      		= $006C
-BITMSK      		= $006E
-SHFAMT      		= $006F
-ROWAC       		= $0070
-COLAC       		= $0072
+Fire1X      		= $006E
+Fire2X      		= $006F
+Fire3X       		= $0070
+Fire1Y              = $0071
+Fire2Y       		= $0072
+Fire3Y       		= $0073
 ENDPT       		= $0074
 DELTAR      		= $0076
 MapFoeFlag      	= $0077
@@ -196,9 +212,9 @@ L008E       		= $008E     ; 8e-$91
 ActFlags       		= $0092		; Flags bit 1 = active  $92, $93, $94
 YamoFlags       	= $0093
 Joystick1       	= $0095			;Stores the current Joystick Direction
-L0096       		= $0096			; joy2
+Joystick2       	= $0096			; joy2
 Button1       		= $0098			;This stores the status of the joystick button
-L0099       		= $0099			; button 2
+Button2       		= $0099			; button 2
 ActX       			= $009B			; Actor Horizontal position
 ActY       			= $009E			; Actor Vertical postion
 ActFace       		= $00A1			; Facing 0 = Left, 1 Right
@@ -836,6 +852,18 @@ L06F3:      ; update DList
             jsr L38FF
 			
             jsr StopSfx				;Writes 0 to $D200 - $D208(AUDC1,AUDF1 - AUDC4,AUDF4) and $8E - $91.
+			
+            lda CurrentMap			;Load current screen number
+            cmp #$0B				;Load current screen number
+            bne InitMap				;Branch if not screen 11
+            
+			lda PlayerMap12LampsCount
+            ora PlayerMap14LampsCount
+            ora PlayerMap16LampsCount
+            bne InitMap
+			
+            ldx #$0D
+            jmp GetMapStartPos
 			
 			; Initialize map
 			
@@ -1567,9 +1595,11 @@ L0BB4:      lda L39FA,X
             dex
             bpl L0BB4
 
+            .ifdef MAPSTART
 			lda #MAPSTART
-			sta CurrentMap     ; Remove This!
-	
+			sta CurrentMap 
+            .endif
+
 			; copy the current player context to the other player context
 			ldx #$1B
 L0BC2:      lda CurrentPlayerContext,X
@@ -1677,7 +1707,7 @@ PlaySfxFoeEnters:
             rts
             
 ResetLampsLeft:  				;Writes lamp values from $40B1 - $40C4 to $28 - $3B
-			ldx #MAPCOUNT
+			ldx #BLCK_MAPCOUNT
 L0CC4:      lda MapLampsCount,X
             sta PlayerMapLampsCounts,X		;Writing lamp values
             dex
@@ -2026,19 +2056,19 @@ L1103:      and #$0F
             lsr
             lsr
             ora L3E63,Y
-L1114:      sta L0096
+L1114:      sta Joystick2
             lda TRIG0,X
-            sta L0099
+            sta Button2
 L111B:      lda IsInGame			;Is player on screen?
             beq L1131				;Branch if no
             lda GamePausedFlag		;Game paused status
             bmi L1135				;Branch is negative
             lda Joystick1			;Joystick direction
-            and L0096				;Joystick direction player 2
+            and Joystick2				;Joystick direction player 2
             cmp #$0F				;Any movement
             bne L1131				;Branch if != $0F
             lda Button1				;Joystick player 1
-            and L0099				;Joystick player 2
+            and Button2				;Joystick player 2
             bne L1135
 L1131:      lda #$00
             sta COUNTR+1			;Reset player 2 timeout counter
@@ -2067,10 +2097,10 @@ L1154:      lda MapFoeFlag
             beq L11B0
             lda IsOpponentFlag		;0 = Computer, 1 = Opponent
             beq L11B0				;Branch if computer
-            lda L0096
+            lda Joystick2
             cmp #$0F
             bne L11AA
-            lda L0099
+            lda Button2
             beq L11AA
             inc L0086
             bne L11B0
@@ -4876,124 +4906,7 @@ L246D:      plp
             cmp OLDCOL+1
             rts
             
-UpdateVines:      lda OLDCOL
-            bmi L247B
-            dec OLDCOL
-            beq L2494
-            rts
-            
-L247B:      and #$7F
-            sec
-            sbc #$01
-            beq L2487
-            ora #$80
-            sta OLDCOL
-            rts
-            
-L2487:      ldx VineSpeed
-            lda VineSpeedTable,X
-            sta OLDCOL
-            dec LOGCOL
-            bmi L24B6
-            rts
-            
-L2494:      lda #<L3992
-            sta L007A
-            lda #>L3992
-            sta SWPFLG
-			
-            lda CurrentMap
-            cmp #$0A
-            bcc L24AA
-			
-			; other type of vines from 10-19
-			
-            lda #<L39AA
-            sta L007A
-            lda #>L39AA
-            sta SWPFLG
-			
-L24AA:      ldx VineSpeed
-            lda VineSpeedTable,X
-            sta OLDCOL
-            dec LOGCOL
-            bpl L24D2
-L24B6:      dec VineSpeed
-            bpl L24C6
-            ldx #$07
-            stx VineSpeed
 
-            lda VineDir
-            eor #$01
-            sta VineDir
-			
-L24C6:      ldx VineSpeed
-            lda VineSpeedTable,X
-            sta OLDCOL
-            lda #$10
-            sta LOGCOL
-L24D2:      lda VineDir
-            bne L24E0
-            inc OLDADR+1
-            lda OLDADR+1
-            cmp #$08
-            bcc L24EB
-            bcs L24E7		; jumps into BIT instruction, effectively LDA #0
-L24E0:      dec OLDADR+1
-            bpl L24EB
-            lda #$07
-			
-			; BIT trick for LDA #0
-            ;bit $00A9 - Doesn't assemble correctly - Had to use line below
-            .byte $2C
-L24E7		.byte $A9,$00
-            sta OLDADR+1
-			
-			; Update Actors positions when on vines
-			; watch out for self-mod
-			
-L24EB:      ldx #$02
-L24ED:      stx CurrentT
-            
-			txa
-            asl
-            asl
-            asl
-            
-			clc
-            adc L007A
-            sta L251B+1
-			
-            lda SWPFLG
-            adc #$00
-            sta L251B+2
-            txa
-            clc
-            adc #$61
-            sta L3A2B
-            jsr L12F9
-            lda L3A2B
-            sta TmpWord2
-            lda L3A2A
-            clc
-            adc MapFont
-            sta TmpWord2+1
-            ldy #$00
-            ldx OLDADR+1
-L251B:      lda $E000,X
-            sta (TmpWord2),Y
-            iny
-            inx
-            cpx #$08
-            bne L2528
-            ldx #$00
-L2528:      cpy #$08
-            bne L251B
-            ldx CurrentT
-            dex
-            bpl L24ED
-            rts
- 
 ;Finds lowest vertical player position           
 ActorL2532:      ldx #$02
             lda #$00
@@ -5260,8 +5173,18 @@ L2692:      cmp #TILE_EXIT_4
 L2699:      cmp #$62
             beq L26E8
 			
-L269D:    	asl DRKMSK
-            ;beq L26DD
+L269D:    	.ifdef FatalOnMap16
+            cmp #$2D
+            bne @+
+            jmp  FatalOnMap16
+            
+@			cmp #$2E
+            bne @+
+            jmp  FatalOnMap16
+@
+            .endif
+
+            asl DRKMSK
             beq @+
 			
 			cmp #TILE_LAMP_1
@@ -5292,59 +5215,9 @@ L269D:    	asl DRKMSK
 			; do it
             rts
 
-
-			 rts 
-
-			cmp #TILE_FATAL_1
-            beq L26F5
-            
-			cmp #TILE_FATAL_2
-            beq L26EE			; Fatal if < Map 10
-            
-			cmp #TILE_FATAL_3
-            beq L26F5
-            
-			cmp #TILE_FATAL_4
-            beq L26F5
-            
-			cmp #TILE_FATAL_5
-            beq L26D1
-            
-			cmp #$D4
-            bcc L26DD
-			
-            cmp #$DB
-            bcc L26F5
-			
-L26D1:      cmp #$F1
-            bcc L26D9
-            
-			cmp #$FD
-            bcc L26F5
-			
-L26D9:      cmp #TILE_TREE	
-            beq L26EB
-			
-L26DD:      rts
-
-FatalOnMap16:      
-			lda CurrentMap
-            cmp #16
-            beq L26E5
-            rts
-            
-L26E5:      jmp L27BD
+L26DD:      rts 
 
 L26E8:      jmp L28AF
-
-L26EB:      jmp TriggerTree
-
-L26EE:      lda CurrentMap
-            cmp #$0A
-            bcs L26F5
-            rts
-            
-L26F5:      jmp HitFatal
 
 ; Hit lamp - Removes lamps from table memory, updates score
 
@@ -5981,7 +5854,7 @@ DoMapInit:
 			; reset all lamps in all 19 maps
 			
 ResetLampsAll:
-			lda #MAPCOUNT
+			lda #BLCK_MAPCOUNT
             sta Tmp4
 @      		lda Tmp4
             asl
@@ -7331,7 +7204,9 @@ L7D00       		= L7800+$500		;Player 2
 L7E00       		= L7800+$600		;Player 3
 L7F00       		= L7800+$700		;Player 4
 
-				.print *
+                    org L7800+$800
+
+				    .print *
 
 
 
